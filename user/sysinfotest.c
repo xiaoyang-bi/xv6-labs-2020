@@ -30,7 +30,7 @@ countfree()
   }
   sinfo(&info);
   if (info.freemem != 0) {
-    printf("FAIL: there is no free mem, but sysinfo.freemem=%d\n",
+    printf("FAIL: there is no free mem, but sysinfo.freemem=%lu\n",
       info.freemem);
     exit(1);
   }
@@ -46,7 +46,7 @@ testmem() {
   sinfo(&info);
 
   if (info.freemem!= n) {
-    printf("FAIL: free mem %d (bytes) instead of %d\n", info.freemem, n);
+    printf("FAIL: free mem %lu (bytes) instead of %lu\n", info.freemem, n);
     exit(1);
   }
   
