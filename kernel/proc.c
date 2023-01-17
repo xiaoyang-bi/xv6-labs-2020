@@ -121,6 +121,29 @@ found:
     return 0;
   }
 
+  // Init user kenel page table
+  //bxy
+  p->kernel_pagetable = proc_kpgtbl();
+  if(p->kernel_pagetable == 0){
+    freeproc(p);
+    release(&p->lock);
+    return 0;
+  }
+
+  // Init user stack in kernel page table
+  // bxy
+
+  for(struct proc *p_ = proc; p_ < &proc[NPROC]; p_++) {
+    uint64 va = KSTACK((int) (p_ - proc));
+    uint64 pa = walkaddr_kernel(va);
+    // printf("kenel stack %p\n", (void*)pa);
+    if(mappages(p->kernel_pagetable, va, PGSIZE, (uint64)pa, PTE_R | PTE_W) != 0)
+      panic("user kernel page table kstack map failed.");
+  }
+  // uint64 pa = walkaddr_kernel(p->kstack);
+  // if(mappages(p->kernel_pagetable, p->kstack, PGSIZE, (uint64)pa, PTE_R | PTE_W) != 0)
+  //   panic("user kernel page table kstack map failed.");
+
   // Set up new context to start executing at forkret,
   // which returns to user space.
   memset(&p->context, 0, sizeof(p->context));
@@ -141,6 +164,13 @@ freeproc(struct proc *p)
   p->trapframe = 0;
   if(p->pagetable)
     proc_freepagetable(p->pagetable, p->sz);
+
+  // free kernel page table without physical mem.
+  // bxy
+  if(p->kernel_pagetable)
+    freewalk_wol(p->kernel_pagetable);
+  // vmprint(p->kernel_pagetable);
+  // p->kernel_pagetable = 0;
   p->pagetable = 0;
   p->sz = 0;
   p->pid = 0;
@@ -230,6 +260,12 @@ userinit(void)
 
   p->state = RUNNABLE;
 
+  // user space to kernel space mapping
+  // bxy
+  if(uvm2kvm_map(p->pagetable, p->kernel_pagetable, 0, p->sz, 0) < 0){
+    panic("Can not map space to kernel space");
+  }
+
   release(&p->lock);
 }
 
@@ -238,10 +274,11 @@ userinit(void)
 int
 growproc(int n)
 {
-  uint sz;
+  uint sz, oldsz;
   struct proc *p = myproc();
 
   sz = p->sz;
+  oldsz = sz;
   if(n > 0){
     if((sz = uvmalloc(p->pagetable, sz, sz + n)) == 0) {
       return -1;
@@ -250,6 +287,12 @@ growproc(int n)
     sz = uvmdealloc(p->pagetable, sz, sz + n);
   }
   p->sz = sz;
+
+  // mapping from user space to new space
+  // bxy
+  if(uvm2kvm_map(p->pagetable, p->kernel_pagetable, oldsz, p->sz, 0) < 0){
+    panic("Can not map space to kernel space");
+  }
   return 0;
 }
 
@@ -294,6 +337,14 @@ fork(void)
   pid = np->pid;
 
   np->state = RUNNABLE;
+
+  // mapping userspace to kernel space
+  // bxy
+  if(uvm2kvm_map(np->pagetable, np->kernel_pagetable, 0, np->sz, 0) < 0){
+    freeproc(np);
+    release(&np->lock);
+    return -1;
+  }
 
   release(&np->lock);
 
@@ -471,12 +522,21 @@ scheduler(void)
         // Switch to chosen process.  It is the process's job
         // to release its lock and then reacquire it
         // before jumping back to us.
+
+        // using user process kernel page table
+        // bzy
+        uvmkinithart(p->kernel_pagetable);
+
         p->state = RUNNING;
         c->proc = p;
         swtch(&c->context, &p->context);
 
         // Process is done running for now.
         // It should have changed its p->state before coming back.
+        
+        // change back to kernel page table
+        // bxy
+        kvminithart();
         c->proc = 0;
 
         found = 1;
@@ -486,6 +546,7 @@ scheduler(void)
 #if !defined (LAB_FS)
     if(found == 0) {
       intr_on();
+      kvminithart();
       asm volatile("wfi");
     }
 #else
@@ -696,4 +757,20 @@ procdump(void)
     printf("%d %s %s", p->pid, state, p->name);
     printf("\n");
   }
+}
+
+// ---------------------------------------------------------
+// function added by bxy
+// ---------------------------------------------------------
+
+/**
+ * @brief Create a kernel page table for a given process,
+ * 
+ * @return pagetable_t 
+ * @author bxy
+ */
+pagetable_t
+proc_kpgtbl()
+{
+  return uvmkernelinit();
 }

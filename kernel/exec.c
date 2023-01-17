@@ -114,7 +114,18 @@ exec(char *path, char **argv)
   p->sz = sz;
   p->trapframe->epc = elf.entry;  // initial program counter = main
   p->trapframe->sp = sp; // initial stack pointer
+
+  // mapping userspace to kernel space
+  //bxy
+  if(uvm2kvm_map(oldpagetable, p->kernel_pagetable, oldsz, 0, 0) < 0 || uvm2kvm_map(p->pagetable, p->kernel_pagetable, 0, p->sz, 0) < 0)
+    goto bad;
+
   proc_freepagetable(oldpagetable, oldsz);
+
+  //test vmprint
+  //bxy
+  if(p->pid == 1)
+    vmprint(p->pagetable);
 
   return argc; // this ends up in a0, the first argument to main(argc, argv)
 
