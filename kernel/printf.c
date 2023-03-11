@@ -132,3 +132,22 @@ printfinit(void)
   initlock(&pr.lock, "pr");
   pr.locking = 1;
 }
+
+
+//By xiaoyang-bi
+void
+backtrace()
+{
+  printf("backtrace:\n");
+  uint64 fp = r_fp();
+  printf("%llu\n", fp);
+  printf("%x\n", fp);
+  // while (1)
+  // {
+    uint64 ra = *(uint64*)(fp - 8);
+    printf("%x\n", (void*)ra);
+    // fp = *(uint64*)(fp - 16);
+  // }
+  
+  return;
+}

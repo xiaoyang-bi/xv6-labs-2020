@@ -69,6 +69,9 @@ sys_sleep(void)
     }
     sleep(&ticks, &tickslock);
   }
+  //by xiaoyang-bi test backtrace()
+  backtrace();
+  // printf("");
   release(&tickslock);
   return 0;
 }
