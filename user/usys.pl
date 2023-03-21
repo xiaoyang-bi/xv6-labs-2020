@@ -36,3 +36,6 @@ entry("getpid");
 entry("sbrk");
 entry("sleep");
 entry("uptime");
+#by xiaoyang-bi
+entry("sigalarm");
+entry("sigreturn");

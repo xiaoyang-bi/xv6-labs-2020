@@ -5,6 +5,7 @@
 #include "spinlock.h"
 #include "proc.h"
 #include "defs.h"
+#include "syscall.h"
 
 struct spinlock tickslock;
 uint ticks;
@@ -55,8 +56,7 @@ usertrap(void)
 
     if(p->killed)
       exit(-1);
-
-    // sepc points to the ecall instruction,
+    // sepc points to the  instruction,
     // but we want to return to the next instruction.
     p->trapframe->epc += 4;
 
@@ -67,6 +67,21 @@ usertrap(void)
     syscall();
   } else if((which_dev = devintr()) != 0){
     // ok
+
+    // added by xiaoyang-bi
+    if(which_dev == 2 && p->is_alarm)
+    {
+      p->alarm_ticks ++;  
+      if(p->alarm_ticks >= p->alarm_interval && p->alarm_last_isfinished)
+      {    
+        // not direct invoke alarm_fn here 
+        // but set it as the first instruction after user space 
+        // save the register to p->trapframe_saved 
+        p->alarm_last_isfinished = 0;
+        memmove(&p->trapframe_saved, p->trapframe, TRAPFRAME_SIZE);
+        p->trapframe->epc = (uint64)p->alarm_fn;
+      }
+    }
   } else {
     printf("usertrap(): unexpected scause %p pid=%d\n", r_scause(), p->pid);
     printf("            sepc=%p stval=%p\n", r_sepc(), r_stval());

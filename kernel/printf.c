@@ -121,6 +121,8 @@ panic(char *s)
   printf("panic: ");
   printf(s);
   printf("\n");
+  //by xiaoyang-bi use backtrace()
+  backtrace();
   panicked = 1; // freeze uart output from other CPUs
   for(;;)
     ;
@@ -140,14 +142,50 @@ backtrace()
 {
   printf("backtrace:\n");
   uint64 fp = r_fp();
-  printf("%llu\n", fp);
-  printf("%x\n", fp);
+  uint64 ra = 0;
+  // printf("fp %p\n", fp);
+  while(PGROUNDDOWN(fp) < PGROUNDUP(fp))
+  {
+      ra = *(uint64*)(fp - 8);
+      fp = *(uint64*)(fp - 16);
+      printf("%p\n", (void*)ra);
+
+  }
   // while (1)
   // {
-    uint64 ra = *(uint64*)(fp - 8);
-    printf("%x\n", (void*)ra);
-    // fp = *(uint64*)(fp - 16);
-  // }
+  //   uint64 stack_top =  PGROUNDDOWN(fp);
+  //   uint64 stack_bottom = PGROUNDUP(fp);
+  //   uint64 ra = *(uint64*)(fp - 8);
+  //   printf("%p\n", (void*)ra);
+  //   printf("stack top %p\n", stack_top);
+  //   printf("stack bottom %p\n", stack_bottom);
+  //   fp = *(uint64*)(fp - 16);
+  //   ra = *(uint64*)(fp - 8);
+  //   stack_top =  PGROUNDDOWN(fp);
+  //   stack_bottom = PGROUNDUP(fp);
+  //   printf("fp %p\n", fp);
+  //   printf("%p\n", (void*)ra);
+  //   printf("stack top %p\n", stack_top);
+  //   printf("stack bottom %p\n", stack_bottom);
+  //   fp = *(uint64*)(fp - 16);
+  //   ra = *(uint64*)(fp - 8);
+  //   stack_top =  PGROUNDDOWN(fp);
+  //   stack_bottom = PGROUNDUP(fp);
+  //   printf("fp %p\n", fp);
+  //   printf("%p\n", (void*)ra);
+  //   printf("stack top %p\n", stack_top);
+  //   printf("stack bottom %p\n", stack_bottom);
+
+
+  //   fp = *(uint64*)(fp - 16);
+  //   ra = *(uint64*)(fp - 8);
+  //   stack_top =  PGROUNDDOWN(fp);
+  //   stack_bottom = PGROUNDUP(fp);
+  //   printf("fp %p\n", fp);
+  //   printf("%p\n", (void*)ra);
+  //   printf("stack top %p\n", stack_top);
+  //   printf("stack bottom %p\n", stack_bottom);
+  // // }
   
   return;
 }

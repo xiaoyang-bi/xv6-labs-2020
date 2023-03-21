@@ -1,0 +1,2 @@
+user 系统函数调用过程
+通过entry("xxcall") -> li a7 SYS_call -> 调用系统函数 -> 函数内部通过argint arg addr获取参数，调用kernel下的  xxcal();

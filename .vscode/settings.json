@@ -1,6 +1,7 @@
 {
     "files.associations": {
         "stdarg.h": "c",
-        "memlayout.h": "c"
+        "memlayout.h": "c",
+        "types.h": "c"
     }
 }

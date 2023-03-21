@@ -1,3 +1,4 @@
+#define TRAPFRAME_SIZE 288
 // Saved registers for kernel context switches.
 struct context {
   uint64 ra;
@@ -82,6 +83,9 @@ struct trapframe {
 
 enum procstate { UNUSED, SLEEPING, RUNNABLE, RUNNING, ZOMBIE };
 
+// added by xiaoyang-bi, inspiration from chat-gpt
+typedef void (*genric_func_ptr)(void);
+
 // Per-process state
 struct proc {
   struct spinlock lock;
@@ -103,4 +107,13 @@ struct proc {
   struct file *ofile[NOFILE];  // Open files
   struct inode *cwd;           // Current directory
   char name[16];               // Process name (debugging)
+
+  //xiaoyang-bi
+  //to help alarm func
+  genric_func_ptr alarm_fn;     // alarm handler function 
+  uint64 alarm_interval;        // alarm interval (ticks)
+  uint64 alarm_ticks;           // number of ticks since last call
+  int is_alarm;                 // to determine whether alarm is working
+  int alarm_last_isfinished;    // indicate whether last alarm handler is finished
+  struct trapframe trapframe_saved;  //save all registers when switching
 };
