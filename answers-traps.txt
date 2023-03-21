@@ -1,8 +1,8 @@
 Which registers contain arguments to functions? For example, which register holds 13 in main's call to printf? 
-a0-a7; a1.
+a0-a7; a2.
 
 Where is the call to function f in the assembly code for main? Where is the call to g? (Hint: the compiler may inline functions.) 
-compiler optimize it only left the ``li a2 12`` at 0x26.
+compiler optimize it only left the ``li a2 12`` at 0x26. function is inlined.
 
 At what address is the function printf located?
 1528(ra) (It is 0x628 in my computer)
@@ -19,11 +19,7 @@ What is the output? Here's an ASCII table that maps bytes to characters.
 The output depends on that fact that the RISC-V is little-endian. If the RISC-V were instead big-endian what would you set i to in order to yield the same output? Would you need to change 57616 to a different value?
 
 HE110 World
-Yes.
-
-
-
-
+No, using C languange can direct read 57616 as int and transfer to hex.
 
 
 In the following code, what is going to be printed after 'y='? (note: the answer is not a specific value.) Why does this happen?
@@ -31,4 +27,4 @@ In the following code, what is going to be printed after 'y='? (note: the answer
 	printf("x=%d y=%d", 3);
       
 
-Random value?
+Random value
