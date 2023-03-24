@@ -72,33 +72,11 @@ usertrap(void)
     //support lazy allocation via page fault
     // printf("page fault %p stack %p\n", (void(*))r_stval(), (void*)PGROUNDUP(p->trapframe->sp));
     uint64 va_pgfault = r_stval();
-
-    // check whether page fault address is valid 
-    if( va_pgfault < p->sz && PGROUNDUP(va_pgfault) <= TRAPFRAME && va_pgfault >= PGROUNDUP(p->trapframe->sp) )
-    {
-      // only alloc one page, no loop
-      // grow
-      char* mem;
-      uint64 va_pgfault_round = PGROUNDDOWN(va_pgfault);
-      mem = kalloc();
-      if(mem == 0){
-        p->killed = 1;
-        exit(-1);
-      }
-      
-        // map pages
-        memset(mem, 0, PGSIZE);
-        if(mappages(p->pagetable, va_pgfault_round, PGSIZE, (uint64)mem, PTE_W|PTE_R|PTE_U) != 0){
-          kfree(mem);
-          p->killed = 1;
-          exit(-1);
-        }
-
-    } else
+    if(lazy_alloc(va_pgfault) != 0)
     {
       p->killed = 1;
       exit(-1);
-    } 
+    }
 
   } else {
     printf("usertrap(): unexpected scause %p pid=%d\n", r_scause(), p->pid);

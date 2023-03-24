@@ -694,3 +694,34 @@ procdump(void)
     printf("\n");
   }
 }
+
+/**
+ * @author xiaoyang-bi
+ * @brief lazy alloc mem for process when proc is using valid addr but not allocated.
+ * (the idea is based on https://juejin.cn/post/7034359064121311240)
+ * @param va_pgfault virtual address causing page fault
+ * @return int -1 failed, 0 success.
+ */
+int lazy_alloc(uint64 va_pgfault)
+{
+   struct proc* p = myproc();
+   if( va_pgfault < p->sz && PGROUNDUP(va_pgfault) <= TRAPFRAME && va_pgfault >= PGROUNDUP(p->trapframe->sp) )
+    {
+      // only alloc one page, no loop
+      // grow
+      char* mem;
+      uint64 va_pgfault_round = PGROUNDDOWN(va_pgfault);
+      mem = kalloc();
+      if(mem == 0){
+        return -1;
+      }  
+        // map pages
+      memset(mem, 0, PGSIZE);
+      if(mappages(p->pagetable, va_pgfault_round, PGSIZE, (uint64)mem, PTE_W|PTE_R|PTE_U) != 0)
+      {
+        kfree(mem);
+        return -1;
+      }
+    } else return -1;
+    return 0;
+}

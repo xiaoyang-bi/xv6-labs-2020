@@ -93,6 +93,7 @@ walk(pagetable_t pagetable, uint64 va, int alloc)
 // Look up a virtual address, return the physical address,
 // or 0 if not mapped.
 // Can only be used to look up user pages.
+//modified by xiaoyang-bi to support lazy allocation.
 uint64
 walkaddr(pagetable_t pagetable, uint64 va)
 {
@@ -104,13 +105,23 @@ walkaddr(pagetable_t pagetable, uint64 va)
 
   pte = walk(pagetable, va, 0);
   if(pte == 0)
-    return 0;
+    goto lazyalloc;
   if((*pte & PTE_V) == 0)
-    return 0;
+    goto lazyalloc;
   if((*pte & PTE_U) == 0)
-    return 0;
+    goto lazyalloc;
   pa = PTE2PA(*pte);
   return pa;
+
+lazyalloc:
+  if(lazy_alloc(va) != 0)
+    return 0;
+  else {
+    pte = walk(pagetable, va, 0);
+    pa = PTE2PA(*pte);
+    return pa;
+  }
+  return pa; // not reach here.
 }
 
 // add a mapping to the kernel page table.
@@ -353,95 +364,19 @@ uvmclear(pagetable_t pagetable, uint64 va)
 // Copy from kernel to user.
 // Copy len bytes from src to virtual address dstva in a given page table.
 // Return 0 on success, -1 on error.
-// int
-// copyout(pagetable_t pagetable, uint64 dstva, char *src, uint64 len)
-// {
-//   uint64 n, va0, pa0;
-
-//   while(len > 0){
-//     va0 = PGROUNDDOWN(dstva);
-//     pa0 = walkaddr(pagetable, va0);
-//     if(pa0 == 0)
-//       return -1;
-//     n = PGSIZE - (dstva - va0);
-//     if(n > len)
-//       n = len;
-//     memmove((void *)(pa0 + (dstva - va0)), src, n);
-
-//     len -= n;
-//     src += n;
-//     dstva = va0 + PGSIZE;
-//   }
-//   return 0;
-// }
-
-// Copy from user to kernel.
-// Copy len bytes to dst from virtual address srcva in a given page table.
-// Return 0 on success, -1 on error.
-// int
-// copyin(pagetable_t pagetable, char *dst, uint64 srcva, uint64 len)
-// {
-//   uint64 n, va0, pa0;
-
-//   while(len > 0){
-//     va0 = PGROUNDDOWN(srcva);
-//     pa0 = walkaddr(pagetable, va0);
-//     if(pa0 == 0)
-//       return -1;
-//     n = PGSIZE - (srcva - va0);
-//     if(n > len)
-//       n = len;
-//     memmove(dst, (void *)(pa0 + (srcva - va0)), n);
-
-//     len -= n;
-//     dst += n;
-//     srcva = va0 + PGSIZE;
-//   }
-//   return 0;
-// }
-
-/**
- * @author xiaoyang-bi
- * @brief copyout with lazy allocation 
- * 
- * @param pagetable 
- * @param dstva 
- * @param src 
- * @param len 
- * @return int 
- */
 int
 copyout(pagetable_t pagetable, uint64 dstva, char *src, uint64 len)
 {
   uint64 n, va0, pa0;
-  struct proc * p = myproc();
 
   while(len > 0){
     va0 = PGROUNDDOWN(dstva);
     pa0 = walkaddr(pagetable, va0);
+    if(pa0 == 0)
+      return -1;
     n = PGSIZE - (dstva - va0);
     if(n > len)
       n = len;
-
-    if(pa0 == 0)
-    {
-      if(va0 < p->sz && PGROUNDUP(va0) <= TRAPFRAME && va0 >= PGROUNDUP(p->trapframe->sp))
-      {
-        // lazy allocation
-        char* mem = kalloc();
-        if(mem == 0)
-          return -1;
-        memset(mem, 0, PGSIZE);
-        if(mappages(p->pagetable, PGROUNDDOWN(va0), PGSIZE, (uint64)mem, PTE_W|PTE_R|PTE_U) != 0)
-        {
-          kfree(mem);
-          return -1;
-        }
-      }else return -1;
-      pa0 = walkaddr(pagetable, va0);
-      if(pa0 == 0) return -1; 
-    }
-
     memmove((void *)(pa0 + (dstva - va0)), src, n);
 
     len -= n;
@@ -451,48 +386,22 @@ copyout(pagetable_t pagetable, uint64 dstva, char *src, uint64 len)
   return 0;
 }
 
-
-/**
- * @author xiaoyang-bi
- * @brief copyin with lazy allocation
- * 
- * @param pagetable 
- * @param dst 
- * @param srcva 
- * @param len 
- * @return int 
- */
+// Copy from user to kernel.
+// Copy len bytes to dst from virtual address srcva in a given page table.
+// Return 0 on success, -1 on error.
 int
 copyin(pagetable_t pagetable, char *dst, uint64 srcva, uint64 len)
 {
   uint64 n, va0, pa0;
-  struct proc * p = myproc();
 
   while(len > 0){
     va0 = PGROUNDDOWN(srcva);
     pa0 = walkaddr(pagetable, va0);
+    if(pa0 == 0)
+      return -1;
     n = PGSIZE - (srcva - va0);
     if(n > len)
       n = len;
-
-    if(pa0 == 0)
-    {
-      if(va0 < p->sz && PGROUNDUP(va0) <= TRAPFRAME && va0 >= PGROUNDUP(p->trapframe->sp))
-      {
-        //lazy allocation
-        char* mem = kalloc();
-        if(mem == 0)
-          return -1;
-        memset(mem, 0, PGSIZE);
-        if(mappages(p->pagetable, PGROUNDDOWN(va0), PGSIZE, (uint64)mem, PTE_W|PTE_R|PTE_U) != 0)
-        {
-          kfree(mem);
-          return -1;
-        }
-      }else return -1;
-      pa0 = walkaddr(pagetable, va0);
-      if(pa0 == 0) return -1; 
-    }
     memmove(dst, (void *)(pa0 + (srcva - va0)), n);
 
     len -= n;
@@ -501,6 +410,108 @@ copyin(pagetable_t pagetable, char *dst, uint64 srcva, uint64 len)
   }
   return 0;
 }
+
+// /**
+//  * @author xiaoyang-bi
+//  * @brief copyout with lazy allocation 
+//  * 
+//  * @param pagetable 
+//  * @param dstva 
+//  * @param src 
+//  * @param len 
+//  * @return int 
+//  */
+// int
+// copyout(pagetable_t pagetable, uint64 dstva, char *src, uint64 len)
+// {
+//   uint64 n, va0, pa0;
+//   struct proc * p = myproc();
+
+//   while(len > 0){
+//     va0 = PGROUNDDOWN(dstva);
+//     pa0 = walkaddr(pagetable, va0);
+//     n = PGSIZE - (dstva - va0);
+//     if(n > len)
+//       n = len;
+
+//     if(pa0 == 0)
+//     {
+//       if(va0 < p->sz && PGROUNDUP(va0) <= TRAPFRAME && va0 >= PGROUNDUP(p->trapframe->sp))
+//       {
+//         // lazy allocation
+//         char* mem = kalloc();
+//         if(mem == 0)
+//           return -1;
+//         memset(mem, 0, PGSIZE);
+//         if(mappages(p->pagetable, PGROUNDDOWN(va0), PGSIZE, (uint64)mem, PTE_W|PTE_R|PTE_U) != 0)
+//         {
+//           kfree(mem);
+//           return -1;
+//         }
+//       }else return -1;
+//       pa0 = walkaddr(pagetable, va0);
+//       if(pa0 == 0) return -1; 
+//     }
+
+//     memmove((void *)(pa0 + (dstva - va0)), src, n);
+
+//     len -= n;
+//     src += n;
+//     dstva = va0 + PGSIZE;
+//   }
+//   return 0;
+// }
+
+
+// /**
+//  * @author xiaoyang-bi
+//  * @brief copyin with lazy allocation
+//  * 
+//  * @param pagetable 
+//  * @param dst 
+//  * @param srcva 
+//  * @param len 
+//  * @return int 
+//  */
+// int
+// copyin(pagetable_t pagetable, char *dst, uint64 srcva, uint64 len)
+// {
+//   uint64 n, va0, pa0;
+//   struct proc * p = myproc();
+
+//   while(len > 0){
+//     va0 = PGROUNDDOWN(srcva);
+//     pa0 = walkaddr(pagetable, va0);
+//     n = PGSIZE - (srcva - va0);
+//     if(n > len)
+//       n = len;
+
+//     if(pa0 == 0)
+//     {
+//       if(va0 < p->sz && PGROUNDUP(va0) <= TRAPFRAME && va0 >= PGROUNDUP(p->trapframe->sp))
+//       {
+//         //lazy allocation
+//         char* mem = kalloc();
+//         if(mem == 0)
+//           return -1;
+//         memset(mem, 0, PGSIZE);
+//         if(mappages(p->pagetable, PGROUNDDOWN(va0), PGSIZE, (uint64)mem, PTE_W|PTE_R|PTE_U) != 0)
+//         {
+//           kfree(mem);
+//           return -1;
+//         }
+//       }else return -1;
+//       pa0 = walkaddr(pagetable, va0);
+//       if(pa0 == 0) return -1; 
+//     }
+//     memmove(dst, (void *)(pa0 + (srcva - va0)), n);
+
+//     len -= n;
+//     dst += n;
+//     srcva = va0 + PGSIZE;
+//   }
+//   return 0;
+// }
 
 // Copy a null-terminated string from user to kernel.
 // Copy bytes to dst from virtual address srcva in a given page table,
