@@ -694,3 +694,49 @@ procdump(void)
     printf("\n");
   }
 }
+
+/**
+ * @author xiaoyang-bi
+ * @brief copy on write
+ * 
+ * @param p pointer to proc's pagetable
+ * @param va_pgfault virtual address causing page fault
+ * @return int 
+ */
+int copy_on_write(pagetable_t pagetable, uint64 va_pgfault)
+{
+    if(va_pgfault >= MAXVA) return -1;
+    uint64 va =PGROUNDDOWN(va_pgfault); 
+    pte_t* pte = walk(pagetable, va, 0);
+    // printf("va %p pte %p pa %p\n", (void*)va, (void*)*pte, (void*)PTE2PA(*pte));
+
+    if( pte == 0 || !(*pte & PTE_V) || !(*pte & PTE_U))
+    {
+      //check PTE_V and PTE_U (for guard page)
+      // printf("invalid mem in cow\n");
+      return -1;
+    }
+    uint flags = PTE_FLAGS(*pte);
+    // printf("%x\n", flags);
+    if(flags & PTE_COW)
+    {
+      //
+      uint64 pa = PTE2PA(*pte);
+      char *mem;
+      flags |= PTE_W;
+      if((mem = kalloc()) == 0){
+        // printf("out of mem in cow\n");
+        return -1;
+      }
+      memmove(mem, (char*)pa, PGSIZE);
+      kfree((void*)pa);
+      // refcounter_sub(pa);
+      uvmunmap(pagetable, va, 1, 0);
+      if(mappages(pagetable, va, PGSIZE, (uint64)mem, flags) != 0)
+      {
+        // printf("map failed in cow\n");
+        return -1;
+      }
+    }else return -1;
+  return 0;
+}

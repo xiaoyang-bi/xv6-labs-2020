@@ -23,6 +23,10 @@ struct {
   struct run *freelist;
 } kmem;
 
+// by xiaoyang-bi
+// reference counter
+int refctr[( (uint64)PHYSTOP - (uint64)KERNBASE + PGSIZE - 1)/PGSIZE + 10];
+
 void
 kinit()
 {
@@ -51,6 +55,9 @@ kfree(void *pa)
   if(((uint64)pa % PGSIZE) != 0 || (char*)pa < end || (uint64)pa >= PHYSTOP)
     panic("kfree");
 
+  uint pgidx = ( (uint64)pa - KERNBASE) / PGSIZE;
+  if(--refctr[pgidx] > 0)
+    return ;
   // Fill with junk to catch dangling refs.
   memset(pa, 1, PGSIZE);
 
@@ -76,7 +83,36 @@ kalloc(void)
     kmem.freelist = r->next;
   release(&kmem.lock);
 
-  if(r)
+  if(r){
     memset((char*)r, 5, PGSIZE); // fill with junk
+    refctr[ ( (uint64)r - KERNBASE) / PGSIZE ] = 1;
+  }
   return (void*)r;
+}
+
+
+/**
+ *@author xiaoyang-bi 
+ *@brief increase reference counter of pa
+ * 
+ * @param pa physical address 
+ */
+void inline refcounter_add(uint64 pa)
+{
+  refctr[ ( (uint64)pa - KERNBASE) / PGSIZE ] ++;
+  return ;
+}
+
+
+/**
+ *@author xiaoyang-bi 
+ *@brief decrease reference counter of pa
+ * 
+ * @param pa physical address 
+ */
+
+void refcounter_sub(uint64 pa)
+{
+  refctr[ ( (uint64)pa - KERNBASE) / PGSIZE ] --;
+  return ;
 }
