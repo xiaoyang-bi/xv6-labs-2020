@@ -730,7 +730,6 @@ int copy_on_write(pagetable_t pagetable, uint64 va_pgfault)
       }
       memmove(mem, (char*)pa, PGSIZE);
       kfree((void*)pa);
-      // refcounter_sub(pa);
       uvmunmap(pagetable, va, 1, 0);
       if(mappages(pagetable, va, PGSIZE, (uint64)mem, flags) != 0)
       {
